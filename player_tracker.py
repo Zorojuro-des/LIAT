@@ -24,7 +24,7 @@ from sklearn.cluster import DBSCAN
 from tqdm import tqdm
 import os
 import argparse
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict
 import warnings
 warnings.filterwarnings('ignore')
 
