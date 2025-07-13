@@ -118,8 +118,8 @@ def main():
 
         print(f"Frame {frame_idx}: matched {len(matches)} players")
 
-        if matches and b_aligned is not None:
-            visualize_alignment(np.array(a_pts), b_aligned, matches, frame_idx)
+        # if matches and b_aligned is not None:
+        #     visualize_alignment(np.array(a_pts), b_aligned, matches, frame_idx)
 
         # Uncomment to only visualize first few
         # if frame_idx > 10:

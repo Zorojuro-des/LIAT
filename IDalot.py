@@ -2,9 +2,101 @@ import json
 import csv
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+from collections import defaultdict, deque
+from typing import List, Optional
+import warnings
+warnings.filterwarnings('ignore')
 
+class PlayerTracker:
+    """Enhanced player tracker with temporal consistency."""
+    
+    def __init__(self, max_missing_frames: int = 5, position_threshold: float = 0.15):
+        self.max_missing_frames = max_missing_frames
+        self.position_threshold = position_threshold
+        self.global_id_counter = 0
+        self.active_tracks = {}  # track_id -> track_info
+        self.track_history = defaultdict(deque)  # track_id -> deque of positions
+        
+    def predict_position(self, track_id: int, current_frame: int) -> Optional[List[float]]:
+        """Predict next position based on track history."""
+        if track_id not in self.track_history:
+            return None
+            
+        history = self.track_history[track_id]
+        if len(history) < 2:
+            return list(history[-1]['position']) if history else None
+            
+        # Use last two positions to predict next position
+        last_pos = np.array(history[-1]['position'])
+        second_last_pos = np.array(history[-2]['position'])
+        
+        # Calculate velocity
+        velocity = last_pos - second_last_pos
+        
+        # Predict next position
+        predicted_pos = last_pos + velocity
+        
+        return predicted_pos.tolist()
+    
+    def calculate_track_confidence(self, track_id: int) -> float:
+        """Calculate confidence score for a track based on its history."""
+        if track_id not in self.track_history:
+            return 0.0
+            
+        history = self.track_history[track_id]
+        if len(history) < 2:
+            return 0.5
+            
+        # Calculate motion consistency
+        positions = [np.array(h['position']) for h in history]
+        velocities = [positions[i] - positions[i-1] for i in range(1, len(positions))]
+        
+        if len(velocities) < 2:
+            return 0.7
+            
+        # Calculate velocity consistency (lower variance = higher confidence)
+        velocity_magnitudes = [np.linalg.norm(v) for v in velocities]
+        velocity_consistency = 1.0 / (1.0 + np.var(velocity_magnitudes))
+        
+        # Track length bonus
+        length_bonus = min(len(history) / 10.0, 1.0)
+        
+        return 0.5 * velocity_consistency + 0.5 * length_bonus
+    
+    def update_track(self, track_id: int, position: List[float], frame_idx: int):
+        """Update track with new position."""
+        self.active_tracks[track_id] = {
+            'last_position': position,
+            'last_frame': frame_idx,
+            'frames_since_update': 0
+        }
+        
+        # Add to history (keep last 10 positions)
+        self.track_history[track_id].append({
+            'position': position,
+            'frame': frame_idx
+        })
+        
+        # Keep only recent history
+        if len(self.track_history[track_id]) > 10:
+            self.track_history[track_id].popleft()
+    
+    def cleanup_inactive_tracks(self, current_frame: int):
+        """Remove tracks that have been inactive for too long."""
+        inactive_tracks = []
+        
+        for track_id, track_info in self.active_tracks.items():
+            frames_since_update = current_frame - track_info['last_frame']
+            if frames_since_update > self.max_missing_frames:
+                inactive_tracks.append(track_id)
+        
+        for track_id in inactive_tracks:
+            del self.active_tracks[track_id]
+            if track_id in self.track_history:
+                del self.track_history[track_id]
 
 def load_relative_positions(json_path):
+    """Load relative positions from JSON file."""
     with open(json_path, "r") as f:
         data = json.load(f)
 
@@ -78,7 +170,8 @@ def match_and_label(view_a_positions, view_b_positions):
     for frame_idx in range(min(len(view_a_positions), len(view_b_positions))):
         a_pts = view_a_positions[frame_idx]
         b_pts = view_b_positions[frame_idx]
-
+        if len(a_pts) == 0 or len(b_pts) == 0:
+            continue  # skip empty frames
         # Match View A to tracked players (temporal matching)
         match_ids = match_points(a_pts, tracked_positions, max_dist=0.1)
         ids_a = []
@@ -94,6 +187,8 @@ def match_and_label(view_a_positions, view_b_positions):
 
         # Align B to A and match spatially
         b_aligned = procrustes_align_partial(b_pts, a_pts)
+        if len(a_pts) == 0 or len(b_aligned) == 0:
+            continue  # extra safety
         dist_matrix = np.linalg.norm(np.array(a_pts)[:, None, :] - np.array(b_aligned)[None, :, :], axis=2)
         row_ind, col_ind = linear_sum_assignment(dist_matrix)
 
