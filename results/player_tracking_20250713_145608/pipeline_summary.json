@@ -1,0 +1,22 @@
+{
+  "pipeline_info": {
+    "timestamp": "2025-07-13T14:59:51.387431",
+    "output_directory": "results\\player_tracking_20250713_145608",
+    "pipeline_version": "1.0"
+  },
+  "basic_tracking": {
+    "total_detections": 4050,
+    "unique_players": 2670,
+    "frames_processed": 127,
+    "broadcast_detections": 1380,
+    "tacticam_detections": 2670
+  },
+  "temporal_tracking": {
+    "total_detections": 5657,
+    "unique_players": 33,
+    "frames_processed": 201,
+    "broadcast_detections": 1380,
+    "tacticam_detections": 4277
+  },
+  "comparison": {}
+}
