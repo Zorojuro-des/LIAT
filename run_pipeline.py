@@ -20,7 +20,6 @@ import argparse
 import time
 from datetime import datetime
 import json
-import shutil
 
 # Import our custom modules
 from player_tracker import PlayerTracker
